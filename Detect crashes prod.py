@@ -16,6 +16,20 @@
 
 # COMMAND ----------
 
+# Set Parameters
+data_window = 5  # Past days to download
+batch_size = 10  # Symbols per batch
+cont_val = 0.1  # Outlier contamination for Isolation Forest
+perc_drop_req = 30  # Required % drop to identify as a crash
+perc_drop_time = 2  # Days over which drop should occur
+subset_symbols = None # Number of symbols to download. If None, all symbols will be downloaded
+receiving_email = 'james.torpy@gmail.com'
+
+# Set up paths
+out_dir = "/tmp/"
+
+# COMMAND ----------
+
 # Install packages
 %pip install yfinance
 
@@ -58,20 +72,7 @@ import smtplib
 
 # Suppress Yahoo Finance error messages
 import logging
-
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
-
-# Set Parameters
-data_window = 5  # Past days to download
-batch_size = 10  # Symbols per batch
-cont_val = 0.1  # Outlier contamination for Isolation Forest
-perc_drop_req = 30  # Required % drop to identify as a crash
-perc_drop_time = 5  # Days over which drop should occur
-subset_symbols = None # Number of symbols to download. If None, all symbols will be downloaded
-receiving_email = 'james.torpy@gmail.com'
-
-# Set up paths
-out_dir = "/tmp/"
 
 # COMMAND ----------
 
