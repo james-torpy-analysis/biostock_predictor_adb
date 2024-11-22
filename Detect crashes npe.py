@@ -19,10 +19,10 @@
 # Set Parameters
 data_window = 5  # Past days to download
 batch_size = 10  # tickers per batch
-drop_perc = 10  # Required % drop to identify as a crash
-drop_period = 2 # Drop must occur within this number of days to identify as a crash
+drop_perc = 20  # Required % drop to identify as a crash
+drop_period = 5 # Drop must occur within this number of days to identify as a crash
 min_value_today = True  # Determines whether the minimum value of the drop must occur on the latest date
-subset_tickers = 500 # Number of tickers to download. If None, all tickers will be downloaded
+subset_tickers = 1000 # Number of tickers to download. If None, all tickers will be downloaded
 receiving_email = 'james.torpy@gmail.com'
 
 # Set up paths
