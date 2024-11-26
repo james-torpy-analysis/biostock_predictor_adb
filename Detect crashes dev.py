@@ -17,12 +17,13 @@
 # COMMAND ----------
 
 # Set Parameters
-data_window = 5  # Past days to download
+data_window = 1  # Past time unit to download
+time_window = 'month'
 batch_size = 5  # tickers per batch
 drop_perc = 30  # Required % drop to identify as a crash
 drop_period = 5 # Drop must occur within this number of days to identify as a crash
 min_value_today = True  # Determines whether the minimum value of the drop must occur on the latest date
-subset_tickers = None # Number of tickers to download. If None, all tickers will be downloaded
+subset_tickers = 10 # Number of tickers to download. If None, all tickers will be downloaded
 receiving_email = 'james.torpy@gmail.com'
 
 # Set up paths
@@ -87,7 +88,7 @@ if current_date.weekday() == 0:  # Monday is represented by 0
     latest_date = current_date - datetime.timedelta(days=3)
 else:
     # Otherwise, get the date of the previous day
-    previous_date = current_date - datetime.timedelta(days=1)
+    latest_date = current_date - datetime.timedelta(days=1)
 
 # Define starting date of crash period
 period_start_date = latest_date
@@ -205,7 +206,10 @@ def download_stock_data(ticker_list, data_window, batch_size):
         batch_tickers = ticker_list[i:i + batch_size]
         for attempt in range(3):
             try:
-                batch_data = yf.download(batch_tickers, period=f"{data_window}d")
+                if time_window == 'month':
+                    batch_data = yf.download(batch_tickers, period=f"{data_window}mo")
+                elif time_window == 'day':
+                    batch_data = yf.download(batch_tickers, period=f"{data_window}d")
                 if not batch_data.empty:
                     out_dict.update(split_stock_data(batch_data))
                     break
@@ -246,13 +250,13 @@ def detect_crashes(ticker, df, latest_date, period_start_date, drop_perc):
         if min_value_today:
             #  Mark min and max values and return if min_value_date == latest_date
             if min_value_date == latest_date:
-                return df.withColumn('max_value', df['Adj Close'] == max_value).withColumn('min_value', df['Adj Close'] == \
-                    min_value).withColumn('ticker', F.lit(ticker))
+                return filtered_df.withColumn('max_value', df['Adj Close'] == max_value).withColumn('min_value', \
+                    df['Adj Close'] == min_value).withColumn('ticker', F.lit(ticker))
             else:
                 return None
         else:
-            return df.withColumn('max_value', df['Adj Close'] == max_value).withColumn('min_value', df['Adj Close'] == \
-                min_value).withColumn('ticker', F.lit(ticker))
+            return filtered_df.withColumn('max_value', df['Adj Close'] == max_value).withColumn('min_value', \
+                df['Adj Close'] == min_value).withColumn('ticker', F.lit(ticker))
     else:
         return None
 
@@ -382,16 +386,15 @@ def main():
     print('Fetching NASDAQ tickers and filtering for health care companies only...')
     nasdaq_tickers = get_tickers()
     if subset_tickers is not None:
-        nasdaq_tickers = nasdaq_tickers[0:(subset_tickers)]
+        nasdaq_tickers = nasdaq_tickers[0:(subset_tickers)] + ['AKTX']
 
     # Filter tickers for healthcare companies only
     filtered_nasdaq = filter_tickers(nasdaq_tickers, sector = 'Healthcare')
     print(f'{len(filtered_nasdaq["tickers"])} health care tickers filtered from {len(nasdaq_tickers)} and will be downloaded.')
     nasdaq_data = download_stock_data(filtered_nasdaq['tickers'], data_window, batch_size)
 
-    # nasdaq_data = download_stock_data(nasdaq_tickers, data_window, batch_size)
-
     # Record how many failed to download
+    print('Counting and removing failed downloads...')
     fail_count = sum([value.filter(value['Adj Close'].isNotNull()).count() < 2 for value in nasdaq_data.values()])
     print('\n', str(fail_count) + ' out of ' + str(len(nasdaq_data)) + ' failed to download')       
     new_row = [Row(stat="data_download", passed=int(len(nasdaq_data)-fail_count), failed=int(fail_count), \
@@ -447,36 +450,30 @@ if __name__ == "__main__":
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 5. Debugging and new features
+# MAGIC 5. Debugging
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### a) Debugging
+# Create df to catch stats
+schema = StructType([
+    StructField("stat", StringType(), True),   # Column 'stat' as String
+    StructField("passed", IntegerType(), True),  # Column 'passed' as Integer
+    StructField("failed", IntegerType(), True),   # Column 'failed' as Integer
+    StructField("total", IntegerType(), True)   # Column 'total' as Integer
+])
+stat_df = spark.createDataFrame([], schema)
 
-# COMMAND ----------
-
-# # Create df to catch stats
-# schema = StructType([
-#     StructField("stat", StringType(), True),   # Column 'stat' as String
-#     StructField("passed", IntegerType(), True),  # Column 'passed' as Integer
-#     StructField("failed", IntegerType(), True),   # Column 'failed' as Integer
-#     StructField("total", IntegerType(), True)   # Column 'total' as Integer
-# ])
-# stat_df = spark.createDataFrame([], schema)
-
-# # Step 1: Download NASDAQ tickers and Stock Data
-# print('Fetching NASDAQ tickers and filtering for health care companies only...')
-# # nasdaq_tickers = get_tickers()
-# # if subset_tickers is not None:
-# #     nasdaq_tickers = nasdaq_tickers[230:240]
+# Step 1: Download NASDAQ tickers and Stock Data
+print('Fetching NASDAQ tickers and filtering for health care companies only...')
+nasdaq_tickers = get_tickers()
+nasdaq_tickers = nasdaq_tickers[200:240]
 
 # nasdaq_tickers = ['ACET']
 
-# # Filter tickers for healthcare companies only
-# filtered_nasdaq = filter_tickers(nasdaq_tickers, sector = 'Healthcare')
-# print(f'{len(filtered_nasdaq["tickers"])} health care tickers filtered from {len(nasdaq_tickers)} and will be downloaded.')
-# nasdaq_data = download_stock_data(filtered_nasdaq['tickers'], data_window, batch_size) 
+# Filter tickers for healthcare companies only
+filtered_nasdaq = filter_tickers(nasdaq_tickers, sector = 'Healthcare')
+print(f'{len(filtered_nasdaq["tickers"])} health care tickers filtered from {len(nasdaq_tickers)} and will be downloaded.')
+nasdaq_data = download_stock_data(filtered_nasdaq['tickers'], data_window, batch_size) 
 
 # # Record how many failed to download
 # fail_count = sum([value.filter(value['Adj Close'].isNotNull()).count() < 2 for value in nasdaq_data.values()])
@@ -525,5 +522,4 @@ if __name__ == "__main__":
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### b) New features
+
