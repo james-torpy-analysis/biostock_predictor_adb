@@ -19,10 +19,10 @@
 # Set Parameters
 data_window = 5  # Past days to download
 batch_size = 10  # tickers per batch
-drop_perc = 20  # Required % drop to identify as a crash
+drop_perc = 30  # Required % drop to identify as a crash
 drop_period = 5 # Drop must occur within this number of days to identify as a crash
 min_value_today = True  # Determines whether the minimum value of the drop must occur on the latest date
-subset_tickers = 1000 # Number of tickers to download. If None, all tickers will be downloaded
+subset_tickers = 500 # Number of tickers to download. If None, all tickers will be downloaded
 receiving_email = 'james.torpy@gmail.com'
 
 # Set up paths
@@ -339,7 +339,7 @@ def main():
     nasdaq_tickers = get_tickers()
     if subset_tickers is not None:
         nasdaq_tickers = nasdaq_tickers[0:(subset_tickers)]
-    nasdaq_data = download_stock_data(nasdaq_tickers, data_window, batch_size)
+    nasdaq_data = download_stock_data(nasdaq_tickers, data_window, batch_size) 
 
     # Record how many failed to download
     fail_count = sum([value.filter(value['Adj Close'].isNotNull()).count() < 2 for value in nasdaq_data.values()])
@@ -352,17 +352,20 @@ def main():
     nasdaq_data = {key: value for key, value in nasdaq_data.items() if value.filter(value['Adj Close'].isNotNull()).count() > 1}
 
     # Step 3: Crash Detection and Visualisation
+    start_time = time.time()
     crashes = {}
     for i, ticker in enumerate(nasdaq_data.keys()):
         crash_result = detect_crashes(ticker, nasdaq_data[ticker], latest_date, period_start_date, drop_perc)
         if crash_result:
             if crash_result.isEmpty():
-                print(f'No crashes detected for {ticker} ({i+1/len(nasdaq_data)}), moving to next ticker.')
+                print(f'No crashes detected for {ticker} ({round(i+1/len(nasdaq_data), 0)}/{len(nasdaq_data)}), moving to next ticker.')
             else:
-                print(f'Crashes detected for {ticker} ({i+1/len(nasdaq_data)}), adding them to crash results.')
+                print(f'Crashes detected for {ticker} ({round(i+1/len(nasdaq_data), 0)}/{len(nasdaq_data)}), adding them to crash results.')
                 crashes[ticker] = crash_result
         else:
-            print(f'No crashes detected for {ticker} ({i+1/len(nasdaq_data)}), moving to next ticker.')
+            print(f'No crashes detected for {ticker} ({round(i+1/len(nasdaq_data))}/{len(nasdaq_data)}), moving to next ticker.')
+    end_time = time.time()
+    print(f"Downloading completed in {end_time - start_time:.2f} seconds")
 
     crash_count = len(crashes)
     total_count = len(nasdaq_data)
@@ -391,133 +394,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 5. Debugging and new features
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### a) Debugging
-
-# COMMAND ----------
-
-#  # Create df to catch stats
-# schema = StructType([
-#     StructField("stat", StringType(), True),   # Column 'stat' as String
-#     StructField("passed", IntegerType(), True),  # Column 'passed' as Integer
-#     StructField("failed", IntegerType(), True),   # Column 'failed' as Integer
-#     StructField("total", IntegerType(), True)   # Column 'total' as Integer
-# ])
-# stat_df = spark.createDataFrame([], schema)
-
-# # Step 1: Download NASDAQ tickers and Stock Data
-# nasdaq_tickers = get_tickers()
-# if subset_tickers is not None:
-#     nasdaq_tickers = nasdaq_tickers[0:(subset_tickers)]
-# nasdaq_data = download_stock_data(nasdaq_tickers, data_window, batch_size)
-
-# # Record how many failed to download
-# fail_count = sum([value.filter(value['Adj Close'].isNotNull()).count() < 2 for value in nasdaq_data.values()])
-# print('\n', str(fail_count) + ' out of ' + str(len(nasdaq_data)) + ' failed to download')       
-# new_row = [Row(stat="data_download", passed=int(len(nasdaq_data)-fail_count), failed=int(fail_count), \
-#     total=int(len(nasdaq_data)))]
-# stat_df = stat_df.union(spark.createDataFrame(new_row))
-
-# # Remove tickers with 1 or less row with non-null values
-# nasdaq_data = {key: value for key, value in nasdaq_data.items() if value.filter(value['Adj Close'].isNotNull()).count() > 1}
-
-# # Step 3: Crash Detection and Visualisation
-# crashes = {}
-# for ticker in nasdaq_data.keys():
-#     crash_result = detect_crashes(ticker, nasdaq_data[ticker], latest_date, period_start_date, drop_perc)
-#     if crash_result:
-#         if crash_result.isEmpty():
-#             print(f'No crashes detected for {ticker}, moving to next ticker.')
-#         else:
-#             print(f'Crashes detected for {ticker}, adding them to crash results.')
-#             crashes[ticker] = crash_result
-#     else:
-#         print(f'No crashes detected for {ticker}, moving to next ticker.')
-
-# crash_count = len(crashes)
-# total_count = len(nasdaq_data)
-# none_count = total_count - crash_count
-# print(f'At least one crash was detected in {crash_count} out of {total_count} tickers')
-# new_row = [Row(stat="crashes_detected", passed=int(crash_count), failed=int(none_count), total=int(total_count))]
-# stat_df = stat_df.union(spark.createDataFrame(new_row))
-
-
-
-
-# COMMAND ----------
-
-# # Step 4: Plot Crashes
-# crash_plots = {}
-# for ticker in crashes.keys():
-#     crash_plot = plot_crashes(crashes[ticker])
-#     if crash_plot:
-#         crash_plots[ticker] = crash_plot
-#     plt.close(crash_plot)
-
-# crash_plots['AAL']
-
-# # ticker = 'AAL'
-# # df = crashes[ticker]
-
-# # # Convert df to pandas
-# # df = df.toPandas()
-
-# # # Plot line/scatter plot of stock price and crashes
-# # fig, ax = plt.subplots()
-# # ax.plot(df['date'], df['Adj Close'], label='Adj Close')
-# # ax.scatter(df[df['min_value']]['date'], df[df['min_value']]['Adj Close'], label='Crash', color='red', alpha=0.8)
-# # plt.xticks(rotation=45, ha='right')
-# # ax.set_title(f"{df['ticker'][0]} Crash Detection")
-# # ax.legend()
-# # plt.tight_layout()
-
-# # fig.show()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### b) New features
-
-# COMMAND ----------
-
-# Parallelise downloading
-
-tickers = ['AAPL', 'GOOG', 'TSLA', 'AMZN']
-
-# Method 1
-out_dict1 = {}
-for i in range(0, len(tickers), batch_size):
-    print(f'\nDownloading batch {i}-{i + batch_size} out of {len(tickers)} tickers...')
-    batch_tickers = tickers[i:i + batch_size]
-    try:
-        batch_data = yf.download(batch_tickers, period=f"{data_window}d")
-        out_dict1.update(split_stock_data(batch_data))
-    except Exception as e:
-        print(f"Failed to download batch {i}-{i + batch_size}: {e}")
-
-# Method 2 (parallel)
-from concurrent.futures import ThreadPoolExecutor
-
-def fetch_data(ticker):
-    try:
-        data = yf.download(ticker, period="{data_window}d")
-        print(f"Downloaded data for {ticker}")
-        return ticker, data
-    except Exception as e:
-        print(f"Failed to fetch data for {ticker}: {e}")
-        return ticker, None
-
-out_dict2 = {}
-with ThreadPoolExecutor(max_workers=5) as executor:
-    for ticker, data in executor.map(fetch_data, tickers):
-        if data is not None:
-            out_dict2[ticker] = data
-
